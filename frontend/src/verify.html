@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Email Verification</title>
+</head>
+<body>
+  <h2 id="status">Verifying email...</h2>
+
+  <p id="redirect" style="font-size: 18px; display: none;"></p>
+  <button id="loginBtn" style="display: none;" onclick="goToLogin()">Go to Login</button>
+
+  <script>
+    function startRedirectTimer() {
+      let countdown = 5;
+      const redirectText = document.getElementById("redirect");
+      const loginBtn = document.getElementById("loginBtn");
+
+      redirectText.style.display = "block";
+      loginBtn.style.display = "inline-block";
+
+      redirectText.textContent = `Redirecting to login in ${countdown} seconds...`;
+
+      const timer = setInterval(() => {
+        countdown--;
+        redirectText.textContent = `Redirecting to login in ${countdown} seconds...`;
+
+        if (countdown <= 0) {
+          clearInterval(timer);
+          goToLogin();
+        }
+      }, 1000);
+    }
+
+    function goToLogin() {
+      window.location.href = "/";
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+
+    const url = window.location.hostname === "localhost"
+      ? "http://127.0.0.1:8000"
+      : "https://slicerconnect.from-delhi.net";
+
+    
+    fetch(`${url}/auth/verify-email?token=${token}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          document.getElementById("status").textContent = "✅ Email verified successfully!";
+        } else {
+          document.getElementById("status").textContent = "❌ Verification failed.";
+        }
+        startRedirectTimer();
+      })
+      .catch(() => {
+        document.getElementById("status").textContent = "❌ Invalid verification link.";
+        startRedirectTimer();
+      });
+  </script>
+</body>
+</html>
+
