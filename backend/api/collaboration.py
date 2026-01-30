@@ -83,29 +83,6 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-async def get_current_user_ws(
-    token: str = Query(...),
-    db: Session = Depends(get_db)
-) -> User:
-    """
-    Authenticate WebSocket connection using token query parameter
-    """
-    from routers.auth import verify_token
-    
-    try:
-        payload = verify_token(token)
-        user_id = payload.get("user_id")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-        
-        return user
-    except Exception:
-        raise HTTPException(status_code=401, detail="Authentication failed")
-
 
 class SessionStartRequest(BaseModel):
     project_id: int
@@ -129,8 +106,6 @@ def start_collaborative_session(
             status_code=403,
             detail="You don't have permission to start a session on this segmentation"
         )
-
-    print('got perm')
     
     session_service = SessionService(db)
     try:
@@ -148,7 +123,6 @@ def start_collaborative_session(
         "started_at": session.started_at,
         "websocket_url": f"/api/collaboration/sessions/{session.id}/ws"
     }
-
 
 @router.websocket("/sessions/{session_id}/ws")
 async def websocket_endpoint(
@@ -174,30 +148,42 @@ async def websocket_endpoint(
         print(str(e))
         raise HTTPException(status_code=401, detail=str(e))
 
-
     session = db.query(CollaborativeSession).filter(
         CollaborativeSession.id == session_id
     ).first()
+    perm_service = PermissionService(db)
+
+    if not session:
+        project = db.query(Project).get(session_id)
+        if not perm_service.can_start_session(current_user, project):
+            raise HTTPException(
+                status_code=403,
+                detail="You don't have permission to start a session on this segmentation"
+            )
+        session_service = SessionService(db)
+        try:
+            session = session_service.start_session(
+                project_id=project.id,
+                user_id=current_user.id,
+                session_name="Session for project " + str(project.id)
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     
-    if not session or session.status != SessionStatus.ACTIVE:
+    if session.status != SessionStatus.ACTIVE:
         await websocket.close(code=1008, reason="Session not found or inactive")
         return
     
-    # Check permissions
-    perm_service = PermissionService(db)
     project = session.project
     if not perm_service.can_edit(current_user, project):
         await websocket.close(code=1008, reason="Access denied")
         return
     
-    # Add user to session
     session_service = SessionService(db)
     session_service.add_participant(session_id, current_user.id)
     
-    # Connect to WebSocket
     await manager.connect(websocket, session_id, current_user.id)
     
-    # Notify others that user joined
     await manager.broadcast(
         session_id,
         {
@@ -224,43 +210,35 @@ async def websocket_endpoint(
     
     try:
         while True:
-            message = await websocket.receive()
-            bytes_data = message.get("bytes") 
-            text_data = message.get("text") 
+            data = await websocket.receive()
+            message = json.loads(data)
+            message_type = message.get("type")
             
-            if bytes_data is not None:
-                confirm = seg_service.handle_igtl_bytes(
-                    raw=bytes_data,
-                    session=session,
-                    user=current_user,
-                )
+            if message_type == 'chat':
                 await manager.broadcast(
                     session_id,
-                    { 'confirmation': confirm }
+                    {
+                        "type": "chat",
+                        "user_id": current_user.id,
+                        "username": current_user.username,
+                        "message": message.get("message"),
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
                 )
-            
-            elif text_data is not None:
-                data = json.loads(text_data)
-                if data['type'] == 'chat':
-                    await manager.broadcast(
-                        session_id,
-                        {
-                            "type": "chat",
-                            "user_id": current_user.id,
-                            "username": current_user.username,
-                            "message": data.get("message"),
-                            "timestamp": datetime.utcnow().isoformat()
-                        }
-                    )
-            
-                elif data['type'] == 'ping':
-                    await manager.send_personal(
-                        websocket,
-                        {
-                            "type": "pong",
-                            "timestamp": datetime.utcnow().isoformat()
-                        }
-                    )
+        
+            elif message_type == 'ping':
+                await manager.send_personal(
+                    websocket,
+                    {
+                        "type": "pong",
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                )
+            elif message_type == "segmentation_update":
+                await session.handle_delta(websocket, message)
+
+            elif message_type == "segmentation_full":
+                await session.handle_full(websocket, message)
     
     except WebSocketDisconnect:
         manager.disconnect(websocket, session_id)
