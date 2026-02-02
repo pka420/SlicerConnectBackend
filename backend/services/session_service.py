@@ -1,5 +1,10 @@
 import sys
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from pathlib import Path
+import zlib
+import asyncio
+import numpy as np
+import base64
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy.orm import Session
@@ -15,7 +20,6 @@ class SessionService:
     """
     Service for managing collaborative editing sessions.
     Handles session lifecycle and participant management.
-    Sessions are now associated with projects, not individual segmentations.
     """
     
     def __init__(self, db: Session):
@@ -85,12 +89,10 @@ class SessionService:
         if session.status != SessionStatus.ACTIVE:
             raise ValueError(f"Session {session_id} is not active")
         
-        # Only session creator or participants can end it
         participants = json.loads(session.participants_json or "[]")
         if user_id != session.started_by_id and user_id not in participants:
             raise ValueError(f"User {user_id} cannot end this session")
         
-        # Update session
         session.status = SessionStatus.ENDED
         session.ended_at = datetime.utcnow()
         
@@ -193,7 +195,6 @@ class SessionService:
             )
         
         if user_id:
-            # Filter sessions where user is a participant
             all_sessions = query.all()
             filtered_sessions = []
             for session in all_sessions:
@@ -282,3 +283,123 @@ class SessionService:
         """
         session = self.get_session_by_project(project_id)
         return session is not None
+
+    async def broadcast(self, message: dict, exclude: Optional[WebSocket] = None):
+        """Broadcast message to all connections except excluded one"""
+        message_text = json.dumps(message)
+        dead_connections = set()
+        
+        for connection in self.connections:
+            if connection != exclude:
+                try:
+                    await connection.send_text(message_text)
+                except Exception as e:
+                    logger.error(f"Error broadcasting to connection: {e}")
+                    dead_connections.add(connection)
+        
+        # Clean up dead connections
+        for connection in dead_connections:
+            self.remove_connection(connection)
+
+    async def handle_delta(self, websocket: WebSocket, message: dict):
+        """Handle delta update with conflict resolution"""
+        user_id = self.user_info[websocket]["user_id"]
+        
+        async with self.lock:
+            try:
+                data = message["data"]
+                
+                # Initialize segmentation if first update
+                if self.segmentation is None:
+                    self.segmentation = SegmentationState(
+                        dimensions=data["dimensions"],
+                        spacing=data["spacing"],
+                        origin=data["origin"],
+                        data_type=data["dataType"]
+                    )
+                    logger.info(f"Initialized segmentation for session {self.session_id}")
+                
+                # Decode delta
+                compressed_indices = base64.b64decode(data["indices"])
+                compressed_values = base64.b64decode(data["values"])
+                
+                indices_bytes = zlib.decompress(compressed_indices)
+                values_bytes = zlib.decompress(compressed_values)
+                
+                indices = np.frombuffer(indices_bytes, dtype=np.uint16).reshape(-1, 3)
+                values = np.frombuffer(values_bytes, dtype=data["dataType"])
+                
+                # Apply delta
+                self.segmentation.apply_delta(indices, values, user_id)
+                
+                # Broadcast to others
+                await self.broadcast(message, exclude=websocket)
+                
+            except Exception as e:
+                logger.error(f"Error handling delta: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                await websocket.send_text(json.dumps({
+                    "type": "error",
+                    "message": f"Failed to apply delta: {str(e)}"
+                }))
+
+    async def handle_full(self, websocket: WebSocket, message: dict):
+        """Handle full segmentation update"""
+        user_id = self.user_info[websocket]["user_id"]
+        
+        async with self.lock:
+            try:
+                data = message["data"]
+                
+                # Decode full segmentation
+                compressed = base64.b64decode(data["imageData"])
+                decompressed = zlib.decompress(compressed)
+                
+                dims = data["dimensions"]
+                dtype = data["dataType"]
+                encoding = data.get("encoding", "raw")
+                
+                if encoding == "rle":
+                    # Decode run-length encoded data
+                    rle_data = json.loads(decompressed.decode('utf-8'))
+                    
+                    # Expand runs
+                    values = np.array(rle_data['values'], dtype=dtype)
+                    counts = np.array(rle_data['counts'])
+                    flat = np.repeat(values, counts)
+                    array = flat.reshape(dims[2], dims[1], dims[0])
+                    
+                    logger.info(f"Decoded RLE: {len(values)} runs -> {array.size} voxels")
+                else:
+                    # Decode raw array
+                    array = np.frombuffer(decompressed, dtype=dtype)
+                    array = array.reshape(dims[2], dims[1], dims[0])
+                
+                # Update or create segmentation state
+                if self.segmentation is None:
+                    self.segmentation = SegmentationState(
+                        dimensions=dims,
+                        spacing=data["spacing"],
+                        origin=data["origin"],
+                        data_type=dtype
+                    )
+                
+                self.segmentation.update_full(array, user_id)
+                
+                # Broadcast to others (send the message as-is to preserve encoding)
+                await self.broadcast(message, exclude=websocket)
+                
+            except Exception as e:
+                logger.error(f"Error handling full segmentation: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                await websocket.send_text(json.dumps({
+                    "type": "error",
+                    "message": f"Failed to apply full segmentation: {str(e)}"
+                }))
+
+
+

@@ -74,4 +74,3 @@ coverage/
 .nyc_output/
 
 backend/storage
-backend/tests

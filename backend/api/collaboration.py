@@ -12,6 +12,7 @@ from .auth import get_current_user
 from services.session_service import SessionService
 from services.segmentation_service import SegmentationService
 from services.permission_service import PermissionService
+import zlib
 
 router = APIRouter(prefix="/collaboration", tags=["Collaboration"])
 
@@ -82,8 +83,6 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-
-
 class SessionStartRequest(BaseModel):
     project_id: int
     session_name: Optional[str] = None
@@ -138,7 +137,7 @@ async def websocket_endpoint(
     
     Message Types:
     - delta: Segmentation changes
-    - cursor: Cursor position updates
+    - full: Segmentation Full
     - chat: Chat messages
     - ping: Keep-alive
     """
@@ -152,6 +151,7 @@ async def websocket_endpoint(
         CollaborativeSession.id == session_id
     ).first()
     perm_service = PermissionService(db)
+    session_service = SessionService(db)
 
     if not session:
         project = db.query(Project).get(session_id)
@@ -160,7 +160,6 @@ async def websocket_endpoint(
                 status_code=403,
                 detail="You don't have permission to start a session on this segmentation"
             )
-        session_service = SessionService(db)
         try:
             session = session_service.start_session(
                 project_id=project.id,
@@ -179,7 +178,6 @@ async def websocket_endpoint(
         await websocket.close(code=1008, reason="Access denied")
         return
     
-    session_service = SessionService(db)
     session_service.add_participant(session_id, current_user.id)
     
     await manager.connect(websocket, session_id, current_user.id)
@@ -188,7 +186,7 @@ async def websocket_endpoint(
         session_id,
         {
             "type": "user_joined",
-            "user_id": current_user.id,
+            "userId": current_user.id,
             "username": current_user.username,
             "timestamp": datetime.utcnow().isoformat()
         },
@@ -210,9 +208,19 @@ async def websocket_endpoint(
     
     try:
         while True:
-            data = await websocket.receive()
-            message = json.loads(data)
-            message_type = message.get("type")
+            message = await websocket.receive_json()
+            try:
+                message_type = message.get("type")
+            except Exception as e:
+                print('error :', str(e))
+                await manager.send_personal(
+                    websocket,
+                    {
+                        "type": "error",
+                        "message": str(e),
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                )
             
             if message_type == 'chat':
                 await manager.broadcast(
@@ -223,7 +231,8 @@ async def websocket_endpoint(
                         "username": current_user.username,
                         "message": message.get("message"),
                         "timestamp": datetime.utcnow().isoformat()
-                    }
+                    },
+                    exclude=websocket
                 )
         
             elif message_type == 'ping':
@@ -235,10 +244,22 @@ async def websocket_endpoint(
                     }
                 )
             elif message_type == "segmentation_update":
-                await session.handle_delta(websocket, message)
+                await seg_service.handle_delta(message)
 
             elif message_type == "segmentation_full":
-                await session.handle_full(websocket, message)
+                success, err  = seg_service.handle_full(message)
+                if not success or err is not None:
+                    print('err while applying segmentation_full ', err)
+                else:
+                    sent_by = current_user.id
+                    print('sent by user: ', sent_by)
+                    for user_id in manager.get_session_users(session_id): 
+                        if user_id != sent_by: 
+                            await manager.broadcast(
+                                session_id,
+                                message=message,
+                                exclude=websocket 
+                            )
     
     except WebSocketDisconnect:
         manager.disconnect(websocket, session_id)
@@ -246,7 +267,7 @@ async def websocket_endpoint(
             session_id,
             {
                 "type": "user_left",
-                "user_id": current_user.id,
+                "userId": current_user.id,
                 "username": current_user.username,
                 "timestamp": datetime.utcnow().isoformat()
             }
@@ -280,7 +301,6 @@ def end_collaborative_session(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
-    # Notify all connected users that session ended
     asyncio.create_task(
         manager.broadcast(
             session_id,

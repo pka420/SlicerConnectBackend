@@ -5,14 +5,15 @@ from datetime import datetime
 from io import BytesIO
 import json
 import struct
+import base64
+import zlib
+import numpy as np
 
 from models import (
     Segmentation, SegmentationVersion, SegmentationEdit, 
     EditType, User, CollaborativeSession
 )
 from services.storage_service import get_storage_service
-
-IGTL_HEADER_SIZE = 58
 
 class SegmentationService:
     """
@@ -134,44 +135,50 @@ class SegmentationService:
         
         return self.storage.get_file(file_path)
 
-    def parse_igtl_header(self, raw: bytes):
-        if len(raw) < IGTL_HEADER_SIZE:
-            raise ValueError("Invalid OpenIGTLink message")
+    def handle_delta(self, message: dict):
+        """Handle delta update with conflict resolution"""
+        try:
+            data = message["data"]
+            dims = data["dimensions"]
+            dtype = data["dataType"]
 
-        header = raw[:IGTL_HEADER_SIZE]
+            compressed = base64.b64decode(data["imageData"])
+            decompressedRaw = zlib.decompress(compressed)
+            delta_array = np.frombuffer(decompressedRaw, dtype=dtype).reshape(dims)
 
-        return {
-            "version": struct.unpack(">H", header[0:2])[0],
-            "data_type": header[2:14].decode("ascii").strip("\x00"),
-            "device_name": header[14:34].decode("ascii").strip("\x00"),
-            "timestamp": struct.unpack(">Q", header[34:42])[0],
-            "body_size": struct.unpack(">Q", header[42:50])[0],
-            "crc": struct.unpack(">Q", header[50:58])[0],
-            "body": raw[58:]
-        }
+            print(delta_array)
+            # apply delta and save logs in db
+            
+        except Exception as e:
+            print(str(e))
 
-    def handle_igtl_bytes(self, raw: bytes, session, user):
-        msg = self.parse_igtl_header(raw)
+    def handle_full(self, message: dict):
+        """Handle full segmentation update
+            Read the whole segmentation
+            and create another message to relay to everyone.
+            
 
-        print("---- OpenIGTLink ----")
-        print("Session:", session.id)
-        print("User:", user.id)
-        print("Type:", msg["data_type"])
-        print("Device:", msg["device_name"])
-        print("Body bytes:", len(msg["body"]))
+            I want to save this seg locally for future and also send to others.
+            What do I need?
+            save the reference in db? - need project_id, created_by_id etc.
+            save the actual file on server?
+        """
+        try:
+            data = message["data"]
+            dims = data["dimensions"]
+            dtype = data["dataType"]
 
-        return True
+            compressed = base64.b64decode(data["imageData"])
+            decompressedRaw = zlib.decompress(compressed)
+            seg_array = np.frombuffer(decompressedRaw, dtype=dtype).reshape(dims)
 
-        # OPTIONAL: Save raw payload
-        # edit = SegmentationEdit(
-        #     segmentation_id=None,  # resolve later
-        #     session_id=session.id,
-        #     edit_type=EditType.DELTA,
-        #     created_by_id=user.id,
-        #     change_description=f"IGTL {msg['data_type']}",
-        #     delta_data=None
-        # )
-        #
-        #
-        # db.add(edit)
-        # db.commit()
+            # save logs in db
+            # save actual seg in files somewhere...
+
+            return True, None
+            
+        except Exception as e:
+            print(str(e))
+            return False, str(e)
+
+
