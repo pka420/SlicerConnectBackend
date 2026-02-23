@@ -3,6 +3,7 @@ from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, E
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
+import numpy as np
 
 class UserRole(str, PyEnum):
     OWNER     = "owner"       # owns project
@@ -169,4 +170,26 @@ class CollaborativeSession(Base):
 
     started_by = relationship("User", foreign_keys=[started_by_id])
     
+class InMemorySegmentation:
+    _store: dict[int, np.ndarray] = {}
 
+    @classmethod
+    def get(cls, session_id: int) -> np.ndarray | None:
+        return cls._store.get(session_id)
+
+    @classmethod
+    def set(cls, session_id: int, array: np.ndarray):
+        cls._store[session_id] = array.copy()
+
+    @classmethod
+    def apply_delta(cls, session_id: int, indices: np.ndarray, values: np.ndarray, dims: tuple, dtype: str) -> np.ndarray:
+        current = cls._store.get(session_id)
+        if current is None:
+            current = np.zeros(dims, dtype=dtype)
+        current[indices[:, 0], indices[:, 1], indices[:, 2]] = values
+        cls._store[session_id] = current
+        return current
+
+    @classmethod
+    def clear(cls, session_id: int):
+        cls._store.pop(session_id, None)

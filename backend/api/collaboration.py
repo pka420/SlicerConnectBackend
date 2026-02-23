@@ -141,6 +141,9 @@ async def websocket_endpoint(
     - chat: Chat messages
     - ping: Keep-alive
     """
+
+    print('in connections')
+    print('session id ', session_id)
     try:
         current_user: User = get_current_user(token, db)
     except Exception as e:
@@ -243,11 +246,23 @@ async def websocket_endpoint(
                         "timestamp": datetime.utcnow().isoformat()
                     }
                 )
-            elif message_type == "segmentation_update":
-                await seg_service.handle_delta(message)
+            elif message_type == "segmentation_delta":
+                success, err  = seg_service.handle_delta(message, session_id, current_user.id, db)
+                if not success or err is not None:
+                    print('err while applying segmentation_full ', err)
+                sent_by = current_user.id
+                print('sent by user: ', sent_by)
+                for user_id in manager.get_session_users(session_id): 
+                    if user_id != sent_by: 
+                        message['username'] = current_user.username
+                        await manager.broadcast(
+                            session_id,
+                            message=message,
+                            exclude=websocket 
+                        )
 
             elif message_type == "segmentation_full":
-                success, err  = seg_service.handle_full(message)
+                success, err  = seg_service.handle_full(message, session_id, current_user.id, db)
                 if not success or err is not None:
                     print('err while applying segmentation_full ', err)
                 else:
@@ -255,6 +270,7 @@ async def websocket_endpoint(
                     print('sent by user: ', sent_by)
                     for user_id in manager.get_session_users(session_id): 
                         if user_id != sent_by: 
+                            message['username'] = current_user.username
                             await manager.broadcast(
                                 session_id,
                                 message=message,

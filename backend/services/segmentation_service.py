@@ -11,7 +11,7 @@ import numpy as np
 
 from models import (
     Segmentation, SegmentationVersion, SegmentationEdit, 
-    EditType, User, CollaborativeSession
+    EditType, User, CollaborativeSession, InMemorySegmentation, Project
 )
 from services.storage_service import get_storage_service
 
@@ -135,50 +135,91 @@ class SegmentationService:
         
         return self.storage.get_file(file_path)
 
-    def handle_delta(self, message: dict):
-        """Handle delta update with conflict resolution"""
+    def handle_delta(self, message: dict, session_id: int, user_id: int, db: Session):
         try:
             data = message["data"]
-            dims = data["dimensions"]
+            dims = tuple(data["dimensions"])
             dtype = data["dataType"]
 
-            compressed = base64.b64decode(data["imageData"])
-            decompressedRaw = zlib.decompress(compressed)
-            delta_array = np.frombuffer(decompressedRaw, dtype=dtype).reshape(dims)
+            indices = np.frombuffer(
+                zlib.decompress(base64.b64decode(data["indices"])), dtype=np.uint16
+            ).reshape(-1, 3)
+            values = np.frombuffer(
+                zlib.decompress(base64.b64decode(data["values"])), dtype=dtype
+            )
 
-            print(delta_array)
-            # apply delta and save logs in db
-            
+            InMemorySegmentation.apply_delta(session_id, indices, values, dims, dtype)
+
+            segmentation = db.query(Segmentation).join(
+                Project, Segmentation.project_id == Project.id
+            ).join(
+                CollaborativeSession, CollaborativeSession.project_id == Project.id
+            ).filter(
+                CollaborativeSession.id == session_id
+            ).first()
+
+            if segmentation:
+                edit = SegmentationEdit(
+                    segmentation_id=segmentation.id,
+                    edit_type=EditType.DELTA,
+                    delta_data=json.dumps({
+                        "indices": data["indices"],
+                        "values": data["values"],
+                        "dimensions": data["dimensions"],
+                        "dataType": dtype,
+                        "numChanges": data.get("numChanges")
+                    }),
+                    created_by_id=user_id,
+                    client_timestamp=message.get("timestamp"),
+                    change_description=f"delta: {data.get('numChanges')} voxels"
+                )
+                db.add(edit)
+                db.commit()
+            else: 
+                print('no seg found')
+            return True, None
+
         except Exception as e:
+            db.rollback()
             print(str(e))
+            return False, str(e)
 
-    def handle_full(self, message: dict):
-        """Handle full segmentation update
-            Read the whole segmentation
-            and create another message to relay to everyone.
-            
-
-            I want to save this seg locally for future and also send to others.
-            What do I need?
-            save the reference in db? - need project_id, created_by_id etc.
-            save the actual file on server?
-        """
+    def handle_full(self, message: dict, session_id: int, user_id: int, db: Session):
         try:
             data = message["data"]
-            dims = data["dimensions"]
+            dims = tuple(data["dimensions"])
             dtype = data["dataType"]
-
             compressed = base64.b64decode(data["imageData"])
             decompressedRaw = zlib.decompress(compressed)
             seg_array = np.frombuffer(decompressedRaw, dtype=dtype).reshape(dims)
 
-            # save logs in db
-            # save actual seg in files somewhere...
+            InMemorySegmentation.set(session_id, seg_array)
+
+            segmentation = db.query(Segmentation).join(
+                Project, Segmentation.project_id == Project.id
+            ).join(
+                CollaborativeSession, CollaborativeSession.project_id == Project.id
+            ).filter(
+                CollaborativeSession.id == session_id
+            ).first()
+
+            if segmentation:
+                edit = SegmentationEdit(
+                    segmentation_id=segmentation.id,
+                    edit_type=EditType.FULL_SAVE,
+                    delta_data=None,
+                    created_by_id=user_id,
+                    client_timestamp=message.get("timestamp"),
+                    change_description="full segmentation sync"
+                )
+                db.add(edit)
+                db.commit()
+            else: 
+                print('no seg found')
 
             return True, None
-            
+
         except Exception as e:
+            db.rollback()
             print(str(e))
             return False, str(e)
-
-
