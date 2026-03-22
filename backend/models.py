@@ -29,6 +29,8 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan"
     )
+    reset_token = Column(String, nullable=True)
+    reset_token_expiry = Column(DateTime, nullable=True)
 
 
 class Project(Base):

@@ -138,7 +138,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     Dependency to get the currently authenticated user from JWT token
     """
     credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
+        status_code=401,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"}
         )
@@ -155,3 +155,47 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
     return user
+
+@router.post("/forgot-password")
+def forgot_password(email: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+
+    if not user:
+        return {"message": "If the email exists, a reset link has been sent"}
+
+    reset_token = secrets.token_urlsafe(32)
+    expiry = datetime.utcnow() + timedelta(minutes=15)
+
+    user.reset_token = reset_token
+    user.reset_token_expiry = expiry
+    db.commit()
+
+    send_email(
+        email=user.email,
+        token=reset_token,
+        purpose="reset"
+    )
+
+    return {"message": "If the email exists, a reset link has been sent"}
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+@router.post("/reset-password")
+def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.reset_token == request.token).first()
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    if user.reset_token_expiry < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Reset token has expired")
+
+    user.password = hash_password(request.new_password)
+    user.reset_token = None
+    user.reset_token_expiry = None
+    db.commit()
+
+    return {"message": "Password reset successful"}
