@@ -43,8 +43,14 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-✅ The backend will start at:
+The backend will start at:
 **[http://127.0.0.1:8000](http://127.0.0.1:8000)**
+
+## Coming from Django World
+makemigrations | alembic revision --autogenerate -m "message"
+migrate | alembic upgrade head
+migrate app <previd> | alembic downgrade -1
+showmigrations | alembic history --indicate-current
 
 
 ## Code Structure:
