@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 from database import get_db
-from models import User, Project, ProjectCollaborator, UserRole
+from models import User, Project, ProjectCollaborator, UserRole, Segmentation
 from .auth import get_current_user  
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
@@ -85,6 +85,7 @@ def create_project(
     )
     db.add(new_project)
     db.commit()
+
     db.refresh(new_project)
     return new_project
 
@@ -209,6 +210,7 @@ def add_collaborator(
     Add a user as a collaborator to the project.
     Only project owners can add collaborators.
     """
+    print(collaborator_data)
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -232,6 +234,8 @@ def add_collaborator(
         raise HTTPException(status_code=404, detail="User not found")
     
     if target_user.id == project.owner_id:
+        detail="Project owner is already part of the project"
+        print(detail)
         raise HTTPException(
             status_code=400,
             detail="Project owner is already part of the project"

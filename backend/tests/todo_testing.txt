@@ -1,0 +1,23 @@
+🧑‍💻 Session Lifecycle
+Single user
+
+[] User joins → makes edits → refreshes page → resumes exact state (camera, selection, history)
+[Done] User joins → edits → disconnects (network drop) → reconnects → state is consistent 
+[] User joins → idles beyond timeout → gets warned → reconnects without data loss
+[Done] User joins → leaves intentionally → joins again in a new tab → picks up same session
+
+Handoff scenarios
+
+User A edits → leaves → User B joins → sees A's full state with no artifacts
+User A edits → leaves → session is empty for N minutes → User B joins → state is still intact
+User A and B both leave simultaneously → User C joins later → recovers correct state
+
+
+👥 Concurrent Users
+Join/leave while others are present
+
+User B joins mid-session while A is actively editing → B sees A's current state immediately, not stale state
+User A edits while B is joining → B's join doesn't interrupt A's stream of edits
+User C joins while A and B are in conflict resolution → C receives the resolved state
+
+

@@ -1,10 +1,10 @@
-import sys
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from pathlib import Path
 import zlib
 import asyncio
 import numpy as np
 import base64
+import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy.orm import Session
@@ -66,14 +66,14 @@ class SessionService:
     
     def end_session(
         self,
-        session_id: int,
+        project_id: int,
         user_id: int
     ) -> CollaborativeSession:
         """
         End a collaborative editing session
         
         Args:
-            session_id: ID of session to end
+            project_id: ID of session to end
             user_id: ID of user ending the session
             
         Returns:
@@ -82,12 +82,12 @@ class SessionService:
         Raises:
             ValueError: If session not found or already ended
         """
-        session = self.db.query(CollaborativeSession).get(session_id)
+        session = self.db.query(CollaborativeSession).get(project_id)
         if not session:
-            raise ValueError(f"Session {session_id} not found")
+            raise ValueError(f"Session {project_id} not found")
         
         if session.status != SessionStatus.ACTIVE:
-            raise ValueError(f"Session {session_id} is not active")
+            raise ValueError(f"Session {project_id} is not active")
         
         participants = json.loads(session.participants_json or "[]")
         if user_id != session.started_by_id and user_id not in participants:
@@ -103,30 +103,29 @@ class SessionService:
     
     def add_participant(
         self,
-        session_id: int,
+        project_id: int,
         user_id: int
     ) -> CollaborativeSession:
         """
         Add a participant to an active session
         
         Args:
-            session_id: ID of session
+            project_id: ID of session
             user_id: ID of user to add
             
         Returns:
             Updated CollaborativeSession record
         """
-        session = self.db.query(CollaborativeSession).get(session_id)
+        session = self.db.query(CollaborativeSession).filter(CollaborativeSession.project_id == project_id).first()
+
         if not session:
-            raise ValueError(f"Session {session_id} not found")
+            raise ValueError(f"Session {project_id} not found")
         
         if session.status != SessionStatus.ACTIVE:
             raise ValueError(f"Cannot add participant to inactive session")
         
-        # Get current participants
         participants = json.loads(session.participants_json or "[]")
         
-        # Add user if not already in list
         if user_id not in participants:
             participants.append(user_id)
             session.participants_json = json.dumps(participants)
@@ -137,31 +136,29 @@ class SessionService:
     
     def remove_participant(
         self,
-        session_id: int,
+        project_id: int,
         user_id: int
     ) -> CollaborativeSession:
         """
         Remove a participant from a session
         
         Args:
-            session_id: ID of session
+            project_id: ID of session
             user_id: ID of user to remove
             
         Returns:
             Updated CollaborativeSession record
         """
-        session = self.db.query(CollaborativeSession).get(session_id)
+        session = self.db.query(CollaborativeSession).filter(CollaborativeSession.project_id == project_id).first()
+
         if not session:
-            raise ValueError(f"Session {session_id} not found")
+            raise ValueError(f"Session {project_id} not found")
         
-        # Cannot remove the session creator
         if user_id == session.started_by_id:
             raise ValueError("Cannot remove session creator")
         
-        # Get current participants
         participants = json.loads(session.participants_json or "[]")
         
-        # Remove user if in list
         if user_id in participants:
             participants.remove(user_id)
             session.participants_json = json.dumps(participants)
@@ -225,20 +222,20 @@ class SessionService:
     
     def get_session_participants(
         self,
-        session_id: int
+        project_id: int
     ) -> List[User]:
         """
         Get all participants in a session
         
         Args:
-            session_id: ID of session
+            project_id: ID of session
             
         Returns:
             List of User records
         """
-        session = self.db.query(CollaborativeSession).get(session_id)
+        session = self.db.query(CollaborativeSession).get(project_id)
         if not session:
-            raise ValueError(f"Session {session_id} not found")
+            raise ValueError(f"Session {project_id} not found")
         
         participant_ids = json.loads(session.participants_json or "[]")
         
@@ -248,20 +245,20 @@ class SessionService:
     
     def is_user_in_session(
         self,
-        session_id: int,
+        project_id: int,
         user_id: int
     ) -> bool:
         """
         Check if user is a participant in session
         
         Args:
-            session_id: ID of session
+            project_id: ID of session
             user_id: ID of user
             
         Returns:
             bool: True if user is in session
         """
-        session = self.db.query(CollaborativeSession).get(session_id)
+        session = self.db.query(CollaborativeSession).get(project_id)
         if not session:
             return False
         
@@ -309,7 +306,6 @@ class SessionService:
             try:
                 data = message["data"]
                 
-                # Initialize segmentation if first update
                 if self.segmentation is None:
                     self.segmentation = SegmentationState(
                         dimensions=data["dimensions"],
@@ -317,9 +313,8 @@ class SessionService:
                         origin=data["origin"],
                         data_type=data["dataType"]
                     )
-                    logger.info(f"Initialized segmentation for session {self.session_id}")
+                    logger.info(f"Initialized segmentation for session {self.project_id}")
                 
-                # Decode delta
                 compressed_indices = base64.b64decode(data["indices"])
                 compressed_values = base64.b64decode(data["values"])
                 
@@ -329,10 +324,8 @@ class SessionService:
                 indices = np.frombuffer(indices_bytes, dtype=np.uint16).reshape(-1, 3)
                 values = np.frombuffer(values_bytes, dtype=data["dataType"])
                 
-                # Apply delta
                 self.segmentation.apply_delta(indices, values, user_id)
                 
-                # Broadcast to others
                 await self.broadcast(message, exclude=websocket)
                 
             except Exception as e:

@@ -75,6 +75,7 @@ class Segmentation(Base):
     project_id      = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
     name            = Column(String(120), nullable=False)
     color           = Column(String(9))  # #RRGGBBAA
+    hash            = Column(Text, nullable=True)  
     created_by_id   = Column(Integer, ForeignKey("users.id"))
     created_at      = Column(DateTime, server_default=func.now())
     updated_at      = Column(DateTime, onupdate=func.now(), server_default=func.now())
@@ -127,8 +128,6 @@ class SegmentationEdit(Base):
     
     file_path = Column(String(500), nullable=True)
     
-    delta_data = Column(Text, nullable=True)  
-    
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, server_default=func.now(), index=True)
     
@@ -171,27 +170,53 @@ class CollaborativeSession(Base):
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, unique=True)
 
     started_by = relationship("User", foreign_keys=[started_by_id])
-    
+
+
 class InMemorySegmentation:
-    _store: dict[int, np.ndarray] = {}
+    _store: dict[int, dict] = {}
 
     @classmethod
-    def get(cls, session_id: int) -> np.ndarray | None:
+    def get_session(cls, session_id: int) -> dict | None:
         return cls._store.get(session_id)
 
     @classmethod
-    def set(cls, session_id: int, array: np.ndarray):
-        cls._store[session_id] = array.copy()
+    def set_full(cls, session_id: int, array: np.ndarray, metadata: dict):
+        """Sets the entire state, including geometry."""
+        cls._store[session_id] = {
+            "array": array.copy(),
+            "metadata": {
+                "dimensions": metadata.get("dimensions"),
+                "spacing": metadata.get("spacing"),
+                "origin": metadata.get("origin"),
+                "direction": metadata.get("direction"),
+                "dataType": metadata.get("dataType")
+            }
+        }
+        print(f"DEBUG: Session {session_id} initialized with metadata.")
 
     @classmethod
-    def apply_delta(cls, session_id: int, indices: np.ndarray, values: np.ndarray, dims: tuple, dtype: str) -> np.ndarray:
-        current = cls._store.get(session_id)
-        if current is None:
-            current = np.zeros(dims, dtype=dtype)
-        current[indices[:, 0], indices[:, 1], indices[:, 2]] = values
-        cls._store[session_id] = current
-        return current
+    def apply_delta(cls, session_id, indices, values, metadata):
+        session = cls._store.get(session_id)
+        
+        # Slicer sends [X, Y, Z], but NumPy needs (Z, Y, X) for reshape and indexing
+        # This MUST match the order of your indices [indices[:,0], indices[:,1], indices[:,2]]
+        z_y_x_shape = (metadata["dimensions"][2], metadata["dimensions"][1], metadata["dimensions"][0])
+        
+        if session is None or session["array"].shape != z_y_x_shape:
+            # Initialize with the correct Z, Y, X order
+            session = {
+                "array": np.zeros(z_y_x_shape, dtype=metadata["dataType"]),
+                "metadata": metadata
+            }
+
+        # This line only works if the frontend sent indices as [Z, Y, X]
+        # (which happens automatically if you use np.argwhere without np.flip)
+        session["array"][indices[:, 0], indices[:, 1], indices[:, 2]] = values
+        
+        session["metadata"] = metadata
+        cls._store[session_id] = session
+        return session
 
     @classmethod
     def clear(cls, session_id: int):
-        cls._store.pop(session_id, None)
+        cls._store.pop(session_id, None)    
