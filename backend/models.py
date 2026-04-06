@@ -74,7 +74,7 @@ class Segmentation(Base):
     id              = Column(Integer, primary_key=True)
     project_id      = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
     name            = Column(String(120), nullable=False)
-    color           = Column(String(9))  # #RRGGBBAA
+    color           = Column(String(9))  
     hash            = Column(Text, nullable=True)  
     created_by_id   = Column(Integer, ForeignKey("users.id"))
     created_at      = Column(DateTime, server_default=func.now())
@@ -85,6 +85,7 @@ class Segmentation(Base):
     creator         = relationship("User", foreign_keys=[created_by_id])
     last_editor     = relationship("User", foreign_keys=[last_editor_id])
     versions        = relationship("SegmentationVersion", back_populates="segmentation", cascade="all, delete-orphan")
+    edits           = relationship("SegmentationEdit", back_populates="segmentation", cascade="all, delete-orphan")
 
 
 class SegmentationVersion(Base):
@@ -134,7 +135,7 @@ class SegmentationEdit(Base):
     change_description = Column(String(500), nullable=True)
     client_timestamp = Column(DateTime, nullable=True)  
     
-    segmentation = relationship("Segmentation", backref="edits")
+    segmentation = relationship("Segmentation", back_populates="edits")
     creator = relationship("User")
     
     __table_args__ = (
@@ -198,8 +199,6 @@ class InMemorySegmentation:
     def apply_delta(cls, session_id, indices, values, metadata):
         session = cls._store.get(session_id)
         
-        # Slicer sends [X, Y, Z], but NumPy needs (Z, Y, X) for reshape and indexing
-        # This MUST match the order of your indices [indices[:,0], indices[:,1], indices[:,2]]
         z_y_x_shape = (metadata["dimensions"][2], metadata["dimensions"][1], metadata["dimensions"][0])
         
         if session is None or session["array"].shape != z_y_x_shape:
@@ -209,8 +208,6 @@ class InMemorySegmentation:
                 "metadata": metadata
             }
 
-        # This line only works if the frontend sent indices as [Z, Y, X]
-        # (which happens automatically if you use np.argwhere without np.flip)
         session["array"][indices[:, 0], indices[:, 1], indices[:, 2]] = values
         
         session["metadata"] = metadata

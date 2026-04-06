@@ -196,6 +196,35 @@ def get_project_detail(
         collaborators=collaborators_list,
         segmentation_count=len(project.segmentations),
     )
+    
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Delete a project. 
+    Only the project owner has permission to delete the project.
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Project not found"
+        )
+
+    if project.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the project owner can delete this project"
+        )
+
+    db.delete(project)
+    db.commit()
+
+    return None
 
 
 
@@ -234,8 +263,6 @@ def add_collaborator(
         raise HTTPException(status_code=404, detail="User not found")
     
     if target_user.id == project.owner_id:
-        detail="Project owner is already part of the project"
-        print(detail)
         raise HTTPException(
             status_code=400,
             detail="Project owner is already part of the project"
