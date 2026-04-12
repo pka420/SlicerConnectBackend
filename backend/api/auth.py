@@ -66,11 +66,11 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
 @router.post("/login")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == request.email).first()
-    if not user.is_verified:
-        raise HTTPException(status_code=403, detail="Please verify your email")
-
     if not user or not verify_password(request.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if not user.is_verified:
+        raise HTTPException(status_code=403, detail="Please verify your email")
 
     token = create_access_token({"sub": user.email})
     return {"access_token": token, "token_type": "bearer", "user": user.username}

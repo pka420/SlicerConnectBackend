@@ -43,11 +43,7 @@ def send_email(email: str, token: str, purpose: str = "verify"):
     msg["To"] = email
 
     try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(EMAIL_USER, EMAIL_PASS)
-            server.sendmail(EMAIL_USER, email, msg.as_string())
+        with smtplib.SMTP("mailserver", 25) as server:
+            server.sendmail("noreply@slicerconnect.from-delhi.net", email, msg.as_string())
     except Exception as e:
         print("Email sending failed:", e)

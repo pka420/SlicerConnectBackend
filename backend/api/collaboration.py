@@ -311,8 +311,10 @@ async def websocket_endpoint(
                 else:
                     sent_by = current_user.id
                     print('sent by user: ', sent_by)
+                    print("users in session: ", manager.get_session_users(project_id))
                     for user_id in manager.get_session_users(project_id): 
                         if user_id != sent_by: 
+                            print('forwarding to : ', user_id)
                             message['username'] = current_user.username
                             await manager.broadcast(
                                 project_id,

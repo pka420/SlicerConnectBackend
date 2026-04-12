@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>API Docs — SlicerConnect</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --brand: #1D9E75;
+      --brand-dark: #0F6E56;
+      --brand-light: #E1F5EE;
+      --ink: #1a1a18;
+      --muted: #666;
+      --hint: #999;
+      --surface: #fff;
+      --raised: #f5f5f3;
+      --border: rgba(0,0,0,0.1);
+      --border-strong: rgba(0,0,0,0.18);
+
+      --get: #185FA5;    --get-bg: #E6F1FB;    --get-text: #0C447C;
+      --post: #3B6D11;   --post-bg: #EAF3DE;   --post-text: #27500A;
+      --delete: #A32D2D; --delete-bg: #FCEBEB; --delete-text: #791F1F;
+      --patch: #854F0B;  --patch-bg: #FAEEDA;  --patch-text: #633806;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink: #f0f0ee; --muted: #aaa; --hint: #666;
+        --surface: #242422; --raised: #2e2e2c; --border: rgba(255,255,255,0.08); --border-strong: rgba(255,255,255,0.15);
+        --get: #85B7EB;    --get-bg: #0C447C;    --get-text: #B5D4F4;
+        --post: #97C459;   --post-bg: #27500A;   --post-text: #C0DD97;
+        --delete: #F09595; --delete-bg: #791F1F; --delete-text: #F7C1C1;
+        --patch: #EF9F27;  --patch-bg: #633806;  --patch-text: #FAC775;
+      }
+    }
+
+    body { font-family: 'Outfit', sans-serif; background: var(--raised); color: var(--ink); line-height: 1.6; }
+
+    .layout { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 220px; flex-shrink: 0; background: var(--surface);
+      border-right: 0.5px solid var(--border); padding: 1.5rem 0;
+      position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    }
+    .sidebar-logo {
+      font-family: 'DM Serif Display', serif; font-size: 1.1rem;
+      padding: 0 1.25rem 1.25rem; border-bottom: 0.5px solid var(--border);
+      margin-bottom: 1rem; color: var(--ink); display: flex; align-items: center; gap: 8px;
+    }
+    .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand); flex-shrink: 0; }
+    .sidebar-group { padding: 0.25rem 0 0.75rem; }
+    .sidebar-group-label {
+      font-size: 0.68rem; font-weight: 500; letter-spacing: 0.08em;
+      color: var(--hint); padding: 0 1.25rem 0.4rem; text-transform: uppercase;
+    }
+    .sidebar-link {
+      display: block; padding: 5px 1.25rem; font-size: 0.82rem; color: var(--muted);
+      text-decoration: none; cursor: pointer; transition: color 0.1s, background 0.1s;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .sidebar-link:hover { color: var(--brand); background: var(--brand-light); }
+    .sidebar-link.active { color: var(--brand-dark); font-weight: 500; }
+
+    .main { flex: 1; padding: 2.5rem 2rem; max-width: 860px; }
+
+    .page-header { margin-bottom: 2.5rem; }
+    .page-header h1 { font-family: 'DM Serif Display', serif; font-size: 2rem; margin-bottom: 0.4rem; }
+    .page-header p { font-size: 0.92rem; color: var(--muted); font-weight: 300; }
+    .version-badge {
+      display: inline-block; background: var(--brand-light); color: var(--brand-dark);
+      font-size: 0.72rem; font-weight: 500; padding: 3px 10px; border-radius: 100px;
+      margin-left: 10px; vertical-align: middle; letter-spacing: 0.04em;
+    }
+
+    .tag-section { margin-bottom: 2.5rem; }
+    .tag-title {
+      font-family: 'DM Serif Display', serif; font-size: 1.2rem;
+      margin-bottom: 1rem; padding-bottom: 0.6rem;
+      border-bottom: 0.5px solid var(--border);
+    }
+
+    .endpoint {
+      background: var(--surface); border: 0.5px solid var(--border);
+      border-radius: 10px; margin-bottom: 10px; overflow: hidden;
+    }
+    .endpoint-header {
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+      cursor: pointer; user-select: none; transition: background 0.1s;
+    }
+    .endpoint-header:hover { background: var(--raised); }
+    .method {
+      font-family: 'DM Mono', monospace; font-size: 0.72rem; font-weight: 500;
+      padding: 3px 8px; border-radius: 5px; min-width: 52px; text-align: center; flex-shrink: 0;
+    }
+    .method.GET    { background: var(--get-bg);    color: var(--get-text); }
+    .method.POST   { background: var(--post-bg);   color: var(--post-text); }
+    .method.DELETE { background: var(--delete-bg); color: var(--delete-text); }
+    .method.PATCH  { background: var(--patch-bg);  color: var(--patch-text); }
+    .path {
+      font-family: 'DM Mono', monospace; font-size: 0.82rem; color: var(--ink); flex: 1;
+    }
+    .path-param { color: var(--brand); }
+    .summary { font-size: 0.82rem; color: var(--muted); margin-left: auto; font-weight: 300; }
+    .lock-icon { color: var(--hint); flex-shrink: 0; }
+    .chevron { color: var(--hint); transition: transform 0.2s; flex-shrink: 0; font-size: 12px; }
+    .endpoint.open .chevron { transform: rotate(90deg); }
+
+    .endpoint-body { display: none; border-top: 0.5px solid var(--border); padding: 1rem 1.25rem; }
+    .endpoint.open .endpoint-body { display: block; }
+
+    .endpoint-desc { font-size: 0.85rem; color: var(--muted); margin-bottom: 1rem; font-weight: 300; line-height: 1.6; }
+
+    .param-section { margin-bottom: 1rem; }
+    .param-section-title { font-size: 0.72rem; font-weight: 500; letter-spacing: 0.06em; color: var(--hint); text-transform: uppercase; margin-bottom: 0.5rem; }
+    .param-row { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; border-bottom: 0.5px solid var(--border); font-size: 0.83rem; }
+    .param-row:last-child { border-bottom: none; }
+    .param-name { font-family: 'DM Mono', monospace; font-size: 0.78rem; color: var(--ink); min-width: 140px; }
+    .param-type { font-size: 0.75rem; color: var(--hint); min-width: 60px; }
+    .param-required { font-size: 0.68rem; background: #FCEBEB; color: #A32D2D; padding: 2px 6px; border-radius: 4px; }
+    .param-optional { font-size: 0.68rem; background: var(--raised); color: var(--hint); padding: 2px 6px; border-radius: 4px; }
+    .param-desc { font-size: 0.8rem; color: var(--muted); font-weight: 300; }
+
+    .schema-block {
+      background: var(--raised); border-radius: 7px; padding: 0.75rem 1rem;
+      font-family: 'DM Mono', monospace; font-size: 0.78rem; color: var(--muted);
+      line-height: 1.8; overflow-x: auto; margin-top: 0.5rem;
+    }
+    .schema-key { color: var(--ink); }
+    .schema-type { color: var(--brand); }
+    .schema-required { color: #A32D2D; font-size: 0.7rem; }
+
+    .response-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 0.83rem; }
+    .status-code { font-family: 'DM Mono', monospace; font-size: 0.78rem; font-weight: 500; min-width: 40px; }
+    .status-2xx { color: var(--post-text); }
+    .status-4xx { color: var(--delete-text); }
+    .response-desc { color: var(--muted); font-weight: 300; font-size: 0.8rem; }
+
+    .auth-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--raised); border: 0.5px solid var(--border);
+      border-radius: 5px; padding: 3px 8px; font-size: 0.75rem; color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    @media (max-width: 640px) {
+      .sidebar { display: none; }
+      .main { padding: 1.5rem 1rem; }
+      .summary { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-dot"></div>
+      SlicerConnect
+    </div>
+    <div id="sidebar-nav"></div>
+  </nav>
+
+  <main class="main">
+    <div class="page-header">
+      <h1>User Authentication API <span class="version-badge">v0.1.0</span></h1>
+      <p>REST API for the SlicerConnect 3D Slicer collaboration extension. Authenticated endpoints require a Bearer token obtained from <code style="font-family:monospace;font-size:0.85em;background:var(--raised);padding:1px 5px;border-radius:4px;">/auth/login</code>.</p>
+    </div>
+    <div id="docs-root"></div>
+  </main>
+
+</div>
+<script>
+const spec = {"openapi":"3.1.0","info":{"title":"User Authentication API","version":"0.1.0"},"paths":{"/auth/register":{"post":{"tags":["Authentication"],"summary":"Register","operationId":"register","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/RegisterRequest"}}},"required":true},"responses":{"200":{"description":"Successful Response"},"422":{"description":"Validation Error"}}}},"/auth/login":{"post":{"tags":["Authentication"],"summary":"Login","operationId":"login","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/LoginRequest"}}},"required":true},"responses":{"200":{"description":"Successful Response"},"422":{"description":"Validation Error"}}}},"/auth/verify-email":{"get":{"tags":["Authentication"],"summary":"Verify Email","operationId":"verify_email","parameters":[{"name":"token","in":"query","required":true,"schema":{"type":"string"}}],"responses":{"200":{"description":"Successful Response"},"422":{"description":"Validation Error"}}}},"/auth/forgot-password":{"post":{"tags":["Authentication"],"summary":"Forgot Password","parameters":[{"name":"email","in":"query","required":true,"schema":{"type":"string"}}],"responses":{"200":{"description":"Successful Response"},"422":{"description":"Validation Error"}}}},"/auth/reset-password":{"post":{"tags":["Authentication"],"summary":"Reset Password","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ResetPasswordRequest"}}},"required":true},"responses":{"200":{"description":"Successful Response"},"422":{"description":"Validation Error"}}}},"/projects":{"get":{"tags":["Projects"],"summary":"List my projects","description":"List all projects where current user is owner or collaborator","security":[{"OAuth2PasswordBearer":[]}],"responses":{"200":{"description":"Array of ProjectListItem"}}},"post":{"tags":["Projects"],"summary":"Create project","description":"Create a new project — current user becomes owner","security":[{"OAuth2PasswordBearer":[]}],"requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ProjectCreate"}}},"required":true},"responses":{"201":{"description":"ProjectResponse"},"422":{"description":"Validation Error"}}}},"/projects/{project_id}":{"get":{"tags":["Projects"],"summary":"Get project detail","description":"Get detailed information about a specific project","security":[{"OAuth2PasswordBearer":[]}],"parameters":[{"name":"project_id","in":"path","required":true,"schema":{"type":"integer"}}],"responses":{"200":{"description":"ProjectDetailResponse"},"422":{"description":"Validation Error"}}},"delete":{"tags":["Projects"],"summary":"Delete project","description":"Delete a project. Only the project owner has permission.","security":[{"OAuth2PasswordBearer":[]}],"parameters":[{"name":"project_id","in":"path","required":true,"schema":{"type":"integer"}}],"responses":{"204":{"description":"No content"},"422":{"description":"Validation Error"}}}},"/projects/{project_id}/collaborators":{"post":{"tags":["Projects"],"summary":"Add collaborator","description":"Add a user as collaborator. Only project owners can add collaborators.","security":[{"OAuth2PasswordBearer":[]}],"parameters":[{"name":"project_id","in":"path","required":true,"schema":{"type":"integer"}}],"requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CollaboratorAdd"}}},"required":true},"responses":{"201":{"description":"CollaboratorResponse"},"422":{"description":"Validation Error"}}},"get":{"tags":["Projects"],"summary":"List collaborators","description":"List all collaborators. Accessible to owner and collaborators.","security":[{"OAuth2PasswordBearer":[]}],"parameters":[{"name":"project_id","in":"path","required":true,"schema":{"type":"integer"}}],"responses":{"200":{"description":"Array of CollaboratorResponse"},"422":{"description":"Validation Error"}}}},"/projects/{project_id}/collaborators/{user_id}":{"patch":{"tags":["Projects"],"summary":"Update collaborator role","description":"Update a collaborator's role. Only project owner can update roles.","security":[{"OAuth2PasswordBearer":[]}],"parameters":[{"name":"project_id","in":"path","required":true,"schema":{"type":"integer"}},{"name":"user_id","in":"path","required":true,"schema":{"type":"integer"}}],"requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CollaboratorUpdate"}}},"required":true},"responses":{"200":{"description":"CollaboratorResponse"},"422":{"description":"Validation Error"}}},"delete":{"tags":["Projects"],"summary":"Remove collaborator","description":"Remove a collaborator. Only project owner can remove.","security":[{"OAuth2PasswordBearer":[]}],"parameters":[{"name":"project_id","in":"path","required":true,"schema":{"type":"integer"}},{"name":"user_id","in":"path","required":true,"schema":{"type":"integer"}}],"responses":{"204":{"description":"No content"},"422":{"description":"Validation Error"}}}},"/collaboration/sessions":{"post":{"tags":["Collaboration"],"summary":"Start session","description":"Start a new collaborative editing session. Returns project_id and WebSocket URL.","security":[{"OAuth2PasswordBearer":[]}],"requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/SessionStartRequest"}}},"required":true},"responses":{"201":{"description":"Session info with WebSocket URL"},"422":{"description":"Validation Error"}}}},"/collaboration/sessions/{project_id}/end":{"post":{"tags":["Collaboration"],"summary":"End session","description":"End a collaborative editing session.","security":[{"OAuth2PasswordBearer":[]}],"parameters":[{"name":"project_id","in":"path","required":true,"schema":{"type":"integer"}},{"name":"create_final_version","in":"query","required":false,"schema":{"type":"boolean","default":true}}],"responses":{"200":{"description":"Successful Response"},"422":{"description":"Validation Error"}}}},"/collaboration/sessions/active":{"get":{"tags":["Collaboration"],"summary":"Get active sessions","description":"Get list of active collaborative sessions.","security":[{"OAuth2PasswordBearer":[]}],"parameters":[{"name":"segmentation_id","in":"query","required":false,"schema":{"type":"integer"}}],"responses":{"200":{"description":"List of active sessions"},"422":{"description":"Validation Error"}}}},"/segmentations":{"post":{"tags":["Segmentations"],"summary":"Create segmentation","description":"Create a new segmentation with initial file upload.","security":[{"OAuth2PasswordBearer":[]}],"requestBody":{"content":{"multipart/form-data":{"schema":{"$ref":"#/components/schemas/Body_create_segmentation"}}},"required":true},"responses":{"201":{"description":"SegmentationResponse"},"422":{"description":"Validation Error"}}}},"/segmentations/{segmentation_id}":{"get":{"tags":["Segmentations"],"summary":"Get segmentation","description":"Get detailed information about a segmentation.","security":[{"OAuth2PasswordBearer":[]}],"parameters":[{"name":"segmentation_id","in":"path","required":true,"schema":{"type":"integer"}}],"responses":{"200":{"description":"SegmentationDetailResponse"},"422":{"description":"Validation Error"}}}},"/segmentations/{segmentation_id}/download":{"get":{"tags":["Segmentations"],"summary":"Download segmentation","description":"Download segmentation file. Optionally specify version_id for a specific version.","security":[{"OAuth2PasswordBearer":[]}],"parameters":[{"name":"segmentation_id","in":"path","required":true,"schema":{"type":"integer"}},{"name":"version_id","in":"query","required":false,"schema":{"type":"integer"}}],"responses":{"200":{"description":"File download"},"422":{"description":"Validation Error"}}}},"/segmentations/{segmentation_id}/versions":{"get":{"tags":["Segmentations"],"summary":"Get version history","description":"Get version history for a segmentation.","security":[{"OAuth2PasswordBearer":[]}],"parameters":[{"name":"segmentation_id","in":"path","required":true,"schema":{"type":"integer"}},{"name":"limit","in":"query","required":false,"schema":{"type":"integer"}}],"responses":{"200":{"description":"Array of VersionResponse"},"422":{"description":"Validation Error"}}}},"/segmentations/projects/{project_id}":{"get":{"tags":["Segmentations"],"summary":"List project segmentations","description":"List all segmentations in a project.","security":[{"OAuth2PasswordBearer":[]}],"parameters":[{"name":"project_id","in":"path","required":true,"schema":{"type":"integer"}}],"responses":{"200":{"description":"Array of SegmentationResponse"},"422":{"description":"Validation Error"}}}},"/users/me":{"get":{"tags":["Users"],"summary":"Get current user","description":"Get current user's profile information.","security":[{"OAuth2PasswordBearer":[]}],"responses":{"200":{"description":"UserResponse"}}}},"/users/me/details":{"get":{"tags":["Users"],"summary":"Get user details","description":"Get detailed user information.","security":[{"OAuth2PasswordBearer":[]}],"responses":{"200":{"description":"Detailed user object"}}}},"/users/all-users":{"get":{"tags":["Users"],"summary":"List all users","security":[{"OAuth2PasswordBearer":[]}],"responses":{"200":{"description":"Array of users"}}}}},"components":{"schemas":{"RegisterRequest":{"properties":{"username":{"type":"string"},"email":{"type":"string","format":"email"},"password":{"type":"string"}},"required":["username","email","password"]},"LoginRequest":{"properties":{"email":{"type":"string","format":"email"},"password":{"type":"string"}},"required":["email","password"]},"ResetPasswordRequest":{"properties":{"token":{"type":"string"},"new_password":{"type":"string"}},"required":["token","new_password"]},"ProjectCreate":{"properties":{"name":{"type":"string","maxLength":100,"minLength":1},"description":{"type":"string","maxLength":1000}},"required":["name"]},"CollaboratorAdd":{"properties":{"user_id":{"type":"integer"},"role":{"type":"string","default":"viewer"}},"required":["user_id"]},"CollaboratorUpdate":{"properties":{"role":{"type":"string"}},"required":["role"]},"SessionStartRequest":{"properties":{"project_id":{"type":"integer"},"session_name":{"type":"string"}},"required":["project_id"]},"Body_create_segmentation":{"properties":{"project_id":{"type":"integer"},"name":{"type":"string"},"color":{"type":"string"},"file":{"type":"string","format":"binary"}},"required":["project_id","name","color","file"]}}}};
+
+function schemaToFields(schemaRef, components) {
+  if (!schemaRef) return [];
+  let schema = schemaRef;
+  if (schemaRef['$ref']) {
+    const name = schemaRef['$ref'].split('/').pop();
+    schema = components.schemas[name] || {};
+  }
+  const props = schema.properties || {};
+  const required = schema.required || [];
+  return Object.entries(props).map(([k, v]) => ({
+    name: k, type: v.format || v.type || 'any',
+    required: required.includes(k),
+    desc: [v.minLength ? `min ${v.minLength}` : '', v.maxLength ? `max ${v.maxLength}` : '', v.default !== undefined ? `default: ${v.default}` : ''].filter(Boolean).join(', ')
+  }));
+}
+
+function formatPath(p) {
+  return p.replace(/\{(\w+)\}/g, '<span class="path-param">{$1}</span>');
+}
+
+function statusClass(code) {
+  return String(code).startsWith('2') ? 'status-2xx' : 'status-4xx';
+}
+
+const tagOrder = ['Authentication', 'Projects', 'Collaboration', 'Segmentations', 'Users'];
+const grouped = {};
+tagOrder.forEach(t => grouped[t] = []);
+
+Object.entries(spec.paths).forEach(([path, methods]) => {
+  Object.entries(methods).forEach(([method, op]) => {
+    const tag = (op.tags || ['Other'])[0];
+    if (!grouped[tag]) grouped[tag] = [];
+    grouped[tag].push({ path, method: method.toUpperCase(), op });
+  });
+});
+
+const root = document.getElementById('docs-root');
+const sidebarNav = document.getElementById('sidebar-nav');
+
+tagOrder.forEach(tag => {
+  const endpoints = grouped[tag];
+  if (!endpoints || endpoints.length === 0) return;
+
+  const tagId = 'tag-' + tag.toLowerCase().replace(/\s+/g, '-');
+
+  const sidebarGroup = document.createElement('div');
+  sidebarGroup.className = 'sidebar-group';
+  sidebarGroup.innerHTML = `<div class="sidebar-group-label">${tag}</div>`;
+  endpoints.forEach(({ path, method, op }) => {
+    const a = document.createElement('a');
+    a.className = 'sidebar-link';
+    a.textContent = op.summary || path;
+    a.href = '#' + tagId;
+    sidebarGroup.appendChild(a);
+  });
+  sidebarNav.appendChild(sidebarGroup);
+
+  const section = document.createElement('div');
+  section.className = 'tag-section';
+  section.id = tagId;
+  section.innerHTML = `<div class="tag-title">${tag}</div>`;
+
+  endpoints.forEach(({ path, method, op }) => {
+    const secured = !!(op.security && op.security.length);
+    const params = op.parameters || [];
+    const pathParams = params.filter(p => p.in === 'path');
+    const queryParams = params.filter(p => p.in === 'query');
+    const bodySchema = op.requestBody?.content?.['application/json']?.schema
+      || op.requestBody?.content?.['multipart/form-data']?.schema;
+    const bodyFields = schemaToFields(bodySchema, spec.components);
+    const isMultipart = !!op.requestBody?.content?.['multipart/form-data'];
+
+    const el = document.createElement('div');
+    el.className = 'endpoint';
+    el.innerHTML = `
+      <div class="endpoint-header">
+        <span class="method ${method}">${method}</span>
+        <span class="path">${formatPath(path)}</span>
+        <span class="summary">${op.summary || ''}</span>
+        ${secured ? `<span class="lock-icon" title="Requires auth">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="2" y="5" width="8" height="6" rx="1.5"/>
+            <path d="M4 5V3.5a2 2 0 1 1 4 0V5"/>
+          </svg>
+        </span>` : ''}
+        <span class="chevron">&#9654;</span>
+      </div>
+      <div class="endpoint-body">
+        ${secured ? `<div class="auth-badge"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5" width="8" height="6" rx="1.5"/><path d="M4 5V3.5a2 2 0 1 1 4 0V5"/></svg> Bearer token required</div>` : ''}
+        ${op.description ? `<div class="endpoint-desc">${op.description}</div>` : ''}
+
+        ${pathParams.length ? `
+        <div class="param-section">
+          <div class="param-section-title">Path parameters</div>
+          ${pathParams.map(p => `
+            <div class="param-row">
+              <span class="param-name">${p.name}</span>
+              <span class="param-type">${p.schema?.type || 'string'}</span>
+              <span class="param-required">required</span>
+            </div>`).join('')}
+        </div>` : ''}
+
+        ${queryParams.length ? `
+        <div class="param-section">
+          <div class="param-section-title">Query parameters</div>
+          ${queryParams.map(p => `
+            <div class="param-row">
+              <span class="param-name">${p.name}</span>
+              <span class="param-type">${p.schema?.type || 'string'}</span>
+              <span class="${p.required ? 'param-required' : 'param-optional'}">${p.required ? 'required' : 'optional'}</span>
+              ${p.schema?.default !== undefined ? `<span class="param-desc">default: ${p.schema.default}</span>` : ''}
+            </div>`).join('')}
+        </div>` : ''}
+
+        ${bodyFields.length ? `
+        <div class="param-section">
+          <div class="param-section-title">Request body ${isMultipart ? '(multipart/form-data)' : '(application/json)'}</div>
+          ${bodyFields.map(f => `
+            <div class="param-row">
+              <span class="param-name">${f.name}</span>
+              <span class="param-type">${f.type}</span>
+              <span class="${f.required ? 'param-required' : 'param-optional'}">${f.required ? 'required' : 'optional'}</span>
+              ${f.desc ? `<span class="param-desc">${f.desc}</span>` : ''}
+            </div>`).join('')}
+        </div>` : ''}
+
+        <div class="param-section">
+          <div class="param-section-title">Responses</div>
+          ${Object.entries(op.responses || {}).map(([code, r]) => `
+            <div class="response-row">
+              <span class="status-code ${statusClass(code)}">${code}</span>
+              <span class="response-desc">${r.description || ''}</span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+
+    el.querySelector('.endpoint-header').addEventListener('click', () => {
+      el.classList.toggle('open');
+    });
+
+    section.appendChild(el);
+  });
+
+  root.appendChild(section);
+});
+</script>
+</body>
+</html>
