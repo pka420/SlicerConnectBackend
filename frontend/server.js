@@ -25,17 +25,34 @@ app.get("/verify", (req, res) => {
     res.send(injected);
 });
 
-app.get("/verify", (req, res) => {
-    const html = fs.readFileSync(path.join(__dirname, "src", "verify.html"), "utf8");
-    const injected = html.replace("__FRONTEND_URL__", process.env.FRONTEND_URL || "");
-    res.send(injected);
-});
-
 app.get("/docs", (req, res) => {
     res.sendFile(path.join(__dirname, "src", "docs.html"));
+});
+
+app.get("/favicon.ico", (req, res) => {
+    res.sendFile(path.join(__dirname, "src", "favicon.ico"));
+});
+
+app.get("/SlicerConnect.png", (req, res) => {
+    res.sendFile(path.join(__dirname, "src", "SlicerConnect.png"));
+});
+
+app.get("/robots.txt", (req, res) => {
+    res.sendFile(path.join(__dirname, "src", "robots.txt"));
+});
+
+app.get("/sitemap.xml", (req, res) => {
+    res.type("application/xml");
+    res.sendFile(path.join(__dirname, "src", "sitemap.xml"));
+});
+
+app.get("/sitemap.xml", (req, res) => {
+    res.type("application/xml");
+    res.sendFile(path.join(__dirname, "src", "sitemap.xml"));
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+

@@ -1,0 +1,11 @@
+User-agent: *
+Disallow: /api/
+Disallow: /auth/
+Disallow: /collaboration/
+Disallow: /segmentations/
+Disallow: /users/
+Disallow: /verify
+Allow: /
+Allow: /docs
+
+Sitemap: https://slicerconnect.from-delhi.net/sitemap.xml
